@@ -1,0 +1,494 @@
+\documentclass[9pt]{article}
+
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{comment}
+\usepackage{proof-dashed}
+\usepackage{url}
+\usepackage{amsmath}
+\usepackage{turnstile}
+\usepackage{amsthm}
+\usepackage[in]{fullpage}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{invariant}{Invariant}
+\newtheorem{definition}[theorem]{Definition}
+
+\newcommand{\argmin}{\arg\!\min}
+\input{fp-macros}
+
+\title{Meld Programs}
+\author{Flavio Cruz}
+
+\begin{document}
+
+\section{Graph Visit}
+
+\begin{verbatim}
+type linear visit(node).
+type linear visited(node).
+type linear unvisited(node).
+type edge(node, node).
+
+visit(@1).
+unvisited(A).
+
+visit(A), unvisited(A)
+   -o visited(A), {B | !edge(A, B) | visit(B)}.
+
+visit(A), visited(A)
+   -o visited(A).
+\end{verbatim}
+
+\begin{invariant}[Node invariant]
+A node is either \texttt{visited} or \texttt{unvisited}.
+\end{invariant}
+\begin{proof}
+This invariant is proved by the axioms (all start with \texttt{unvisited}) and by rules 1 and 2.
+\end{proof}
+
+\begin{definition}[Node sets]
+Visited nodes are contained in set $V$, while unvisited nodes are in set $U$.
+\end{definition}
+
+\begin{lemma}[Visited set lemma]
+$V \cup U = N$ and $V \cap U = \emptyset$.
+Visited set $V$ always increases or stays the same size. The inverse for set $U$.
+\end{lemma}
+\begin{proof}
+Initially, $V = \emptyset$ and $U = N$, where $N$ is the set of all nodes.
+
+By rule 1, $V$ increases by 1 while $U$ decreases by 1.
+
+With rule 2, sets stay the same.
+\end{proof}
+
+\begin{lemma}[Edge lemma]
+The algorithm generates, one \texttt{visit} per edge.
+\end{lemma}
+\begin{proof}
+By the visited set lemma, once nodes become visited, they no longer become unvisited, therefore rule 1 applies only once per node. This rule generates a \texttt{visit} fact per edge.
+\end{proof}
+
+\begin{definition}[Connected graph]
+In a connected graph, every pair of nodes has a path between them.
+\end{definition}
+
+\begin{theorem}[Correctness]
+If the graph is connected, set $V$ will eventually be $N$ while $U = \emptyset$.
+\end{theorem}
+\begin{proof}
+By induction. In the base case,
+we have a \texttt{visit(@1)} axiom that will turn node \texttt{@1} into a \texttt{visited} node.
+By the edge lemma, we know that a \texttt{visit} fact will be generated per edge of node \texttt{@1}.
+
+In the inductive case, we have a set $V'$ and a set $U'$. Since the graph is connected there must be a
+node $a \in V'$ that is connected to a node $b \in U'$. $V$ will then become $V', b$.
+
+We can also prove this through contradiction: Suppose that once the algorithm finishes, there is a node
+$a \in U$ that is connected through to a node $b \in V$. By contradiction, we know that this is not
+possible since node $b$ has generated a \texttt{visit} fact for that edge (edge lemma).
+\end{proof}
+
+\section{Bipartiteness checking}
+
+\begin{verbatim}
+type edge(node, node).
+type linear visit(node, bool).
+type linear uncolored(node).
+type linear colored(node, bool).
+type linear fail(node).
+
+uncolored(A).
+visit(@1, true).
+
+visit(A, C), uncolored(A)
+   -o colored(A, C),
+      {B | !edge(A, B) | visit(A, !C)}.
+
+visit(A, C), colored(A, C)
+   -o colored(A, C).
+
+visit(A, C1), colored(A, C2), C1 <> C2
+   -o fail(A).
+
+visit(A, C), fail(A)
+   -o fail(A).
+\end{verbatim}
+
+\begin{invariant}[Node]
+A node has 4 possible states:
+\begin{itemize}
+   \item \texttt{uncolored}
+   \item \texttt{colored(true)}
+   \item \texttt{colored(false)}
+   \item \texttt{fail}
+\end{itemize}
+\end{invariant}
+\begin{proof}
+Initially, all nodes are \texttt{uncolored}. All the 4 rules just exchange the node state.
+\end{proof}
+
+\begin{definition}[Node sets]
+$C_{true}$ is the set of nodes with color \texttt{true}.
+
+$C_{false}$ is the set of nodes with color \texttt{false}.
+
+$F$ is the set of \texttt{fail} nodes.
+
+$U$ is the set of \texttt{uncolored} nodes.
+\end{definition}
+
+\begin{lemma}[Node sets]
+$U \cup C_{true} \cup C_{false} \cup U = N$
+
+$U \cap C_{true} \cap C_{false} \cap U = \emptyset$
+\end{lemma}
+
+\begin{proof}
+From the node invariant.
+\end{proof}
+
+\begin{definition}[Bipartiteness]
+A graph is bipartite if for every edge $a \leftrightarrow b$ we can assign $a$ to $C_{true}$ and $b$ to $C_{false}$ or the inverse.
+\end{definition}
+
+\begin{lemma}[Set lemma]
+Uncolored set $U$ always increases or stays the same size. The inverse for set $C_{true}$, $C_{false}$ and $F$.
+\end{lemma}
+\begin{proof}
+Initially, $U = N$, where $N$ is the set of all nodes.
+
+By rule 1, $C_{true}$ or $C_{false}$ increases by 1 while $U$ decreases by 1.
+
+By rule 2, it stays the same.
+
+By rule 3, idem.
+
+By rule 4, idem.
+\end{proof}
+
+\begin{lemma}[Edge]
+If the graph is connected, the algorithm generates one \texttt{visit} per edge plus the initial \texttt{visit(@1, true)}. The nodes in set $C_{true}$ and $C_{false}$ are always consistent in terms of bipartiteness: if a node is one set, the neighbors will be in the other set.
+\end{lemma}
+\begin{proof}
+Use induction. In the base case, node \texttt{@1} generates one \texttt{visit} per neighbor. Consistency is trivial.
+
+In the inductive case, assume the colored nodes are consistent. We know that when a node receives a \texttt{visit} fact and is uncolored it will send \texttt{visit} facts to the neighbors. Otherwise, it will be part of the $F$ set, keeping consistency of the $C_x$ sets.
+By the set lemma, once nodes become \texttt{colored} or \texttt{fail}, they no longer go back to being \texttt{uncolored}. This will happen in rule 1 where a \texttt{visit} fact is generated per edge.
+
+Since the graph is connected, every node will be visited, because, by contradition, we cannot have a node that is not visited since that would mean that one of the unvisited nodes was connected to a \texttt{colored} node and thus the algorithm would have more rules to run.
+\end{proof}
+
+\begin{theorem}[Bipartiteness correctness]
+If a graph is connected and bipartite then the in the final state of the algorithm all nodes will be either in $C_{false}$ or $C_{true}$.
+\end{theorem}
+\begin{proof}
+By induction, we prove that uncolored nodes will become part of either $C_{true}$ or $C_{false}$ and if there's an edge between nodes in the two sets, they will have different colors.
+
+In the base case we start with empty sets and then we color node \texttt{@1} with \texttt{true}. Rule 1 is then applied which forces nodes to be colored with color \texttt{false}.
+
+In the inductive case, we have a set of nodes already colored. When one colored node sent a \texttt{visit} fact it has the inverse color of the node. If the other node is uncolored, it then becomes colored with the right color. If it is already colored, by the bipartiteness property, it will keep the same color.
+
+Using the set lemma, and knowning that the graph is connected, all nodes will eventually be part of $C_{false}$ or $C_{true}$. We prove this by contradiction: if there is a node is uncolored, it must have a path to a colored node. In that case, there must be more rules to be derived, a clear contradiction.
+\end{proof}
+
+\begin{theorem}[Fail correctness]
+If the graph is connected but not bipartite, then the set $F$ will have at least one element.
+\end{theorem}
+\begin{proof}
+Using the edge lemma, we know that the nodes in  $C_{true}$ and $C_{false}$ are bipartite consistent and
+that each edge results in a \texttt{visit} fact. However, if the graph is not bipartite, there is at least one node will receive two \texttt{visit}'s with different colors, moving the node from the $C_x$ set to $F$. This is true by contradiction: if all nodes are in $C_{true}$ or $C_{false}$ it means that for each node, all the neighbors have a different color, which is a contradiction.
+\end{proof}
+
+\section{Shortest Path}
+
+\begin{verbatim}
+type edge(node, node, int).
+type linear shortest(node, int, list node).
+type linear relax(node, int, list node).
+
+shortest(A, +00, []).
+relax(start, 0, [start]).
+
+relax(A, D1, P1), shortest(A, D2, P2),
+D1 < D2
+   -o shortest(A, D1, P1),
+      {B, W | !edge(A, B, W) | relax(B, D1 + W)}.
+
+relax(A, D1, P1), shortest(A, D2, P2),
+D1 >= D2
+   -o shortest(A, D2, P2).
+\end{verbatim}
+
+\begin{invariant}[Distance]
+\texttt{relax(A, D, P)} represents a valid distance \texttt{D} and a valid path \texttt{P} to node \texttt{start}. $D >= D'$, where $D'$ is the shortest distance to \texttt{start}.
+
+\texttt{shortest(A, D, P)} represents a valid distance \texttt{D} and a valid path \texttt{P} to a node \texttt{start} if \texttt{D != +00}. $D >= D'$, where $D'$ is the shortest distance to \texttt{start}.
+\end{invariant}
+\begin{proof}
+By mutual induction. All the axioms are valid and rule 1 and 2 validate the invariant using the inductive hypothesis.
+\end{proof}
+
+\begin{lemma}[Relaxation]
+Every new improved distance will be propagated to the neighbor nodes exactly once.
+\end{lemma}
+\begin{proof}
+By rule 1, we know that when the distance is relaxed, we keep the new shorter distance and propagate the distances. Every new distance that is larger will be ignored by rule 1.
+\end{proof}
+
+\begin{theorem}[Correctness]
+If a graph has only positive weights and once the algorithm completes, \texttt{shortest(A, D, P)} will represent the shortest distance from \texttt{A} to \texttt{start} and \texttt{P} its corresponding path.
+\end{theorem}
+\begin{proof}
+By induction.
+
+In the base case, we have \texttt{relax(start, 0, [start])} that will give us the shortest distance for node \texttt{start}.
+
+In the inductive case, consider a subset of nodes $S$ where the shortest distance was reached and the new \texttt{relax} distances have been propagated (relaxation lemma). Also consider the set $T$ with the remaining nodes.
+
+We know that at least one node $t$ in $T$ must have a \texttt{relax} distance that is the shortest since there must exist a path from \texttt{start} to $t$, where there is an edge that connects $s \in S$ to $t$.
+Node $t$ is selected by computing $\argmin_t d(s \in S) + w(s, t)$, where $d(x)$ is the distance to the \texttt{stat} node and $w(a, b)$ the weight of the edge between $a$ and $b$.
+By contradiction, this is the shortest distance, because any other path that may pass through an element of $T$ will not be the shortest (elements of $T$ do not have the shortest distance). This node then relaxes its shortest distance and becomes part of $S$.
+
+Finally, once the $N = \emptyset$, all the shortest distances will be computed.
+\end{proof}
+
+\begin{theorem}[Termination]
+Given a graph with positive weights, the algorithm will terminate.
+\end{theorem}
+\begin{proof}
+Let's assume it does not terminate. For every new \texttt{relax} fact, we either execute rule 1 or rule 2. Rule 2 reduces the database by one fact, therefore it cannot be the source of non-terminating behavior. Rule 1 generates one \texttt{relax} fact per neighbor and by the relaxation lemma, it means that this distance is propagated only once. This distance is always larger than the original distance (due to the positive weights) and by the distance invariant, it cannot ever be shorter than $D'$ (the shortest distance). The program then terminates when every node finds its shortest distance. This is a contradition.
+\end{proof}
+
+\section{Quick sort}
+
+\begin{verbatim}
+type linear down(node, list int).
+type linear up(node, list int).
+type linear back(node, node).
+type linear sorted(node, node, list int).
+
+down(@1, L).
+
+down(A, [X]) -o up(A, [X]).
+down(A, [X, Y]), X <= Y -o up(A, [X, Y]).
+down(A, [X, Y]), X > Y -o up(A, [Y, X]).
+
+down(A, [Pivot | Xs]) -o split(A, Pivot, Xs, [], []).
+
+split(A, Pivot, [], Small, Great) -o
+   exists B, C. (back(B, A), back(C, A),
+                 down(B, Small), down(C, Great),
+                 waitpivot(A, Pivot, B, C)).
+split(A, Pivot, [X | Xs], Small, Great),
+X <= Pivot
+   -o split(A, Pivot, Xs, [X | Small], Great).
+split(A, Pivot, [X | Xs], Small, Great),
+X > Pivot
+   -o split(A, Pivot, Xs, Small, [X | Great]).
+
+waitpivot(A, Pivot, S, G),
+sorted(A, S, Small),
+sorted(A, G, Great)
+   -o reverse(A, Small, [], [Pivot | Great]).
+
+reverse(A, [X | Xs], Small, G) -o reverse(A, Xs, [X | Small], G).
+reverse(A, [], Small, Great) -o append(A, Small, Great).
+
+append(A, [X | Xs], L) -o append(A, Xs, [X | L).
+append(A, [], L) -o up(A, L).
+
+up(A, L), back(A, B) -o sorted(B, A, L).
+\end{verbatim}
+
+\begin{lemma}{Split lemma}
+If \texttt{split(A, Pivot, L, Small, Great)} then eventually \texttt{split(A, Pivot, [], Small' ++ Small, Great' ++ Great)}, where elements of \texttt{Small'} are \texttt{<=} \texttt{Pivot} and elements of \texttt{Great'} are \texttt{> Pivot}.
+\end{lemma}
+\begin{proof}
+By induction on the size of \texttt{L}.
+\end{proof}
+
+\begin{lemma}{Reverse lemma}
+If \texttt{reverse(A, L, R, G)} then eventually \texttt{reverse(A, [], R' ++ R, G)}, where \texttt{R'} is the reverse of \texttt{L}.
+\end{lemma}
+\begin{proof}
+By induction on the size of $L$.
+\end{proof}
+
+\begin{lemma}{Append lemma}
+If \texttt{append(A, L, R)} then eventually \texttt{append(A, [], R' ++ R)}, where \texttt{R'} is the reverse of \texttt{L}.
+\end{lemma}
+\begin{proof}
+By induction on the size of $L$.
+\end{proof}
+
+\begin{theorem}{Sort theorem}
+If \texttt{down(A, L)} then \texttt{up(A, L')}, where \texttt{L'} is the sorted list.
+\end{theorem}
+\begin{proof}
+By induction on the size of \texttt{L}.
+
+The base cases are proven trivially.
+
+\begin{verbatim}
+down(A, [X]) -o up(A, [X]).
+down(A, [X, Y]), X <= Y -o up(A, [X, Y]).
+down(A, [X, Y]), X > Y -o up(A, [Y, X]).
+\end{verbatim}
+
+In the inductive case we have:
+\begin{verbatim}
+down(A, [Pivot | Xs]) -o split(A, Pivot, Xs, [], []).
+\end{verbatim}
+
+We necessarily derive \texttt{split(A, Pivot, Xs, [], [])}. Using the split lemma we get \texttt{split(A, Pivot, Small, Great)}. With this fact we can only use the rule:
+
+\begin{verbatim}
+split(A, Pivot, [], Small, Great) -o
+   exists B, C. (back(B, A), back(C, A),
+                 down(B, Small), down(C, Great),
+                 waitpivot(A, Pivot, B, C)).
+\end{verbatim}
+
+We derive \texttt{back(B, A)}, \texttt{back(C, A)}, \texttt{down(B, Small)}, \texttt{down(C, Great)} and \texttt{waitpivot(A, Pivot, B, C)}. We know that \texttt{Small} and \texttt{Great} is smaller than \texttt{L}, so, if we apply induction, we get \texttt{up(B, Small')} and \texttt{up(C, Great')}.
+These last two facts will be applied using the following rule:
+
+\begin{verbatim}
+up(A, L), back(A, B) -o sorted(B, A, L).
+\end{verbatim}
+
+Generating \texttt{sorted(A, B, Small')} and \texttt{sorted(A, C, Great')}. Furthermore, we can use the only rule that accepts \texttt{sorted} and \texttt{waitpivot} facts:
+
+\begin{verbatim}
+waitpivot(A, Pivot, S, G),
+sorted(A, S, Small),
+sorted(A, G, Great)
+   -o reverse(A, Small, [], [Pivot | Great]).
+\end{verbatim}
+
+Returning \texttt{reverse(A, Small', [], [Pivot | Great'])}. By applying the reverse lemma, we get \texttt{reverse(A, [], Small'', [Pivot | Great'])}, where \texttt{Small''} is the reverse of \texttt{Small'}.
+
+Now, if we apply the only available rule for \texttt{reverse}, we get \texttt{append(A, Small'', [Pivot | Great'])}. Applying the append lemma, we get \texttt{append(A, [], Small' ++ [Pivot | Great'])} and then \texttt{up(A, Small' ++ [Pivot | Great']).}. We know that \texttt{Small' ++ [Pivot | Great']} is sorted since \texttt{Small'} contains the sorted list of elements \texttt{<= Pivot} and \texttt{Great'} the elements \texttt{> Pivot}.
+
+\end{proof}
+
+\section{N Queens}
+
+\begin{verbatim}
+propagate-right(@0, []).
+
+propagate-left(A, State)
+  -o {L | !left(A, L), L <> A | propagate-left(L, State)},
+     new-state(A, State).
+propagate-right(A, State)
+  -o {R | !right(A, R), R <> A | propagate-right(R, State)},
+     new-state(A, State).
+
+new-state(A, State), !coord(A, X, Y)
+  -o test-y(A, Y, State, State).
+
+// check if there is no queen on the same column
+test-y(A, Y, [], State), !coord(A, OX, OY)
+  -o test-diag-left(A, OX - 1, OY - 1, State, State).
+test-y(A, Y, [X, Y1 | RestState], State), Y = Y1
+  -o 1. // fail
+test-y(A, Y, [X, Y1 | RestState], State), Y <> Y1
+  -o test-y(A, Y, RestState, State).
+
+// check if there is no queen on the left diagonal
+test-diag-left(A, X, Y, _, State), X < 0 || Y < 0, !coord(A, OX, OY)
+  -o test-diag-right(A, OX - 1, OY + 1, State, State).
+test-diag-left(A, X, Y, [X1, Y1 | RestState], State), X = X1, Y = Y1
+  -o 1. // fail
+test-diag-left(A, X, Y, [X1, Y1 | RestState], State), X <> X1 || Y <> Y1
+  -o test-diag-left(A, X - 1, Y - 1, RestState, State).
+
+// check if there is no queen on the right diagonal
+test-diag-right(A, X, Y, [], State), X < 0 || Y >= size, !coord(A, OX, OY)
+  -o send-down(A, [OX, OY | State]). // add new queen
+test-diag-right(A, X, Y, [X1, Y1 | RestState], State), X = X1, Y = Y1
+  -o 1. // fail
+test-diag-right(A, X, Y, [X1, Y1 | RestState], State), X <> X1 || Y <> Y1
+  -o test-diag-right(A, X - 1, Y + 1, RestState, State).
+
+send-down(A, State), !coord(A, size - 1, _)
+  -o final-state(A, State).
+send-down(A, State), !coord(A, CX, _), CX <> size - 1
+  -o {B | !down-right(A, B), B <> A | propagate-right(B, State)},
+     {B | !down-left(A, B), B <> A | propagate-left(B, State)}.
+\end{verbatim}
+
+\begin{lemma}[test-y lemma]
+If \texttt{test-y(A, Y, State, OriginalState)} then either $\exists_{x'}. {(x', y) \in \mathtt{State}}$ and \texttt{test-y} is consumed or \texttt{test-diag-left(A, OX - 1, OY - 1, OriginalState, OriginalState)}, where \texttt{OX} and \texttt{OY} are the coordinates of the square.
+\end{lemma}
+\begin{proof}
+Induction on the size of \texttt{State}.
+
+First rule: immediatelly the second conclusion.
+
+Second rule: immediatelly the third conclusion.
+
+Third rule: by induction.
+\end{proof}
+
+\begin{lemma}[test-diag-left lemma]
+If \texttt{test-diag-left(A, X, Y, State, OriginalState)} then either $\exists_{x', y'}. {(x', y') \in \mathtt{State}}$, where $x = x' - a$ and $y' = y - a$, where $a$ is positive or $0$ and \texttt{test-diag-left} is consumed or \texttt{test-diag-right(A, OX - 1, OY + 1, OriginalState, OriginalState)}, where \texttt{OX} and \texttt{OY} are the coordinates of the square.
+\end{lemma}
+\begin{proof}
+Induction on the size of \texttt{State}.
+
+First rule: immediatelly the second conclusion.
+
+Second rule: immediatelly the first conclusion.
+
+Third rule: by induction.
+\end{proof}
+
+\begin{lemma}[test-diag-right lemma]
+If \texttt{test-diag-right(A, X, Y, State, OriginalState)} then either $\exists_{x', y'}. {(x', y') \in \mathtt{State}}$, where $x = x' - a$ and $y' = y + a$, where $a$ is positive or $0$ and \texttt{test-diag-right} is consumed or \texttt{send-down(A, [(OX, OY) | OriginalState])}, where \texttt{OX} and \texttt{OY} are the coordinates of the square.
+\end{lemma}
+\begin{proof}
+Induction on the size of \texttt{State}.
+
+First rule: immediatelly the second conclusion.
+
+Second rule: immediatelly the first conclusion.
+
+Third rule: by induction.
+\end{proof}
+
+\begin{theorem}{State validation}
+If \texttt{test-y(A, OY, State, State)} then either everything is consumed or \texttt{send-down(A, [(OX, OY) | State])} is derived, where \texttt{OX} and \texttt{OY} are the coordinates of the square and are a valid addition to the \texttt{State}.
+\end{theorem}
+\begin{proof}
+Use the previous three lemmas.
+\end{proof}
+
+\begin{lemma}{Propagate left lemma}
+If \texttt{propagate-left(A, State)} then every cell to the left, including \texttt{A} will derive \texttt{new-state(A, State)}.
+\end{lemma}
+\begin{proof}
+By induction on the number of cells to the left of \texttt{A}. The only rule that uses \texttt{propagate-left/2} will prove the lemma.
+\end{proof}
+
+\begin{lemma}{Propagate right lemma}
+If \texttt{propagate-right(A, State)} then every cell to the right, including \texttt{A} will derive \texttt{new-state(A, State)}.
+\end{lemma}
+\begin{proof}
+By induction on the number of cells to the right of \texttt{A}. The only rule that uses \texttt{propagate-right/2} will prove the lemma.
+\end{proof}
+
+\begin{theorem}{States theorem}
+For a given row, we will compute several \texttt{send-down(A, State)} facts that represent valid configurations that include that row and the rows above.
+\end{theorem}
+\begin{proof}
+By induction on the number of rows.
+
+For row 0, we use the axiom \texttt{propagate-right(@0, [])}, that will be propagated to all nodes in row 0. By using the state validation theorem, we know that every node will derive \texttt{send-down(A, [(X, Y)])}, all valid configurations.
+
+
+By induction, we know that row $X'$ has derived every \texttt{send-down/2} possible. Such facts will be sent downwards to row $X = X' + 1$ using the last rule in the program, deriving \texttt{propagate-right} or \texttt{propagate-left} that will derive \texttt{new-state} at each right or left cell. We do not derive anything at the cell below or the ones to the sides since they would not be valid. Using the \texttt{new-state} fact, we get a \texttt{test-y} fact that will be checked using the state validation theorem, filtering all new valid configurations and deriving \texttt{send-down/2}.
+\end{proof}
+
+\end{document}
