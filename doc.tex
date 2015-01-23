@@ -11,6 +11,7 @@
 \usepackage[in]{fullpage}
 \newtheorem{theorem}{Theorem}
 \newtheorem{lemma}{Lemma}
+\newtheorem{corollary}{Corollary}
 \newtheorem{invariant}{Invariant}
 \newtheorem{definition}[theorem]{Definition}
 
@@ -491,4 +492,202 @@ For row 0, we use the axiom \texttt{propagate-right(@0, [])}, that will be propa
 By induction, we know that row $X'$ has derived every \texttt{send-down/2} possible. Such facts will be sent downwards to row $X = X' + 1$ using the last rule in the program, deriving \texttt{propagate-right} or \texttt{propagate-left} that will derive \texttt{new-state} at each right or left cell. We do not derive anything at the cell below or the ones to the sides since they would not be valid. Using the \texttt{new-state} fact, we get a \texttt{test-y} fact that will be checked using the state validation theorem, filtering all new valid configurations and deriving \texttt{send-down/2}.
 \end{proof}
 
+\section{MiniMax}
+
+\begin{verbatim}
+const root-player = 1.
+
+play(@0, InitialGame, 1 (NextPlayer), 0 (LastPlay), 1 (Depth)).
+
+play(A, Game, NextPlayer, LastPlay, Depth),
+0 <> minimax_score(Game, NextPlayer, root-player)
+   -o score(A, Score, LastPlay).
+
+play(A, Game, NextPlayer, LastPlay, Depth),
+0 = minimax_score(Game, NextPlayer, root-player)
+   -o build-next-plays(A, Game, NextPlayer, 0, array_size(Game), 0,
+         LastPlay, Depth).
+
+build-next-plays(A, Game, NextPlayer, X, X, 0, Play, Depth)
+   -o score(A, minimax_score(Game), Play).
+build-next-plays(A, Game, NextPlayer, X, X, N, Play, Depth),
+N > 0,
+NextPlayer = root-player
+   -o maximize(A, N, mininf, 0).
+build-next-plays(A, Game, NextPlayer, X, X, N, Play, Depth),
+N > 0,
+NextPlayer <> root-player
+   -o minimize(A, N, maxinf, 0).
+build-next-plays(A, Game, NextPlayer, X, T, Descendants, Play, Depth),
+array_get(Game, X) = 0
+   -o build-next-plays(A, Game, NextPlayer, X + 1, T, Descendants + 1, Play, Depth),
+      exists B. (play(B, array_set(Game, X, NextPlayer),
+                     next-player(NextPlayer), X, Depth + 1),
+                 back(B, A)).
+build-next-plays(A, Game, NextPlayer, X, T, Descendants, Play, Depth)
+   -o build-next-plays(A, Game, NextPlayer, X + 1, T, Descendants, Play, Depth).
+
+score(A, Score, BestPlay),
+back(A, B)
+   -o new-score(B, Score, BestPlay).
+
+new-score(A, Score, Play),
+minimize(A, N, Current, BestPlay),
+N > 0
+Current > Score // new best
+   -o minimize(A, N - 1, Score, Play).
+
+new-score(A, Score, Play),
+minimize(A, N, Current, BestPlay),
+N > 0,
+Current <= Score
+   -o minimize(A, N - 1, Current, BestPlay).
+
+minimize(A, 0, Score, BestPlay) -o score(A, Score, BestPlay).
+
+new-score(A, Score, Play),
+maximize(A, N, Current, BestPlay),
+N > 0,
+Current < Score // best
+   -o maximize(A, N - 1, Score, Play).
+
+new-score(A, Score, Play),
+maximize(A, N, Current, BestPlay),
+N > 0,
+Current >= Score
+   -o maximize(A, N - 1, Current, BestPlay).
+
+maximize(A, 0, Score, BestPlay) -o score(A, Score, BestPlay).
+\end{verbatim}
+
+\begin{lemma}[Play Lemma]
+If \texttt{build-next-plays(A, Game, NextPlayer, X, T, NumberDescendants, Play,
+   Depth)} then $\exists_n$ where $n$ is the number of available plays for
+\texttt{NextPlayer} from position \texttt{X} to \texttt{T} in the board
+\texttt{Game}. We also create $n$ children $B$ where \texttt{play(B, Game',
+      OtherPlayer, Play', Depth + 1)} and \texttt{back(B, A)} is true, where \texttt{OtherPlayer =
+   next-player(NextPlayer)} and \texttt{Play'} is \texttt{>= X} and \texttt{< T}
+   and \texttt{array\_get(Game, Play) = 0} (free space). Afterwards, if
+   \texttt{NextPlayer = root-player}, \texttt{maximize(A, N, mininf, 0)} or
+   \texttt{minimize(A, N, maxinf, 0)} otherwise. If \texttt{NumberDescendants =
+      0} and $n = 0$ then \texttt{score/3} is derived instead.
+\end{lemma}
+\begin{proof}
+By induction on number \texttt{X}. There are 5 possible rules.
+
+Rule 1: no descendants were found \texttt{NumberDescendants = 0}, we derive
+\texttt{score(A, minimax\_score(Game, NextPlayer, root-player), Play)}.
+
+Rule 2: $n > 0$ and \texttt{NextPlayer = root-player} therefore
+\texttt{maximize(A, N, mininf, 0)}.
+
+Rule 3: $n > 0$ and \texttt{NextPlayer <> root-player} therefore
+\texttt{minimize(A, N, maxinf, 0)}.
+
+Rule 4: there is a free space on position \texttt{X}. We create a new children
+\texttt{B} (\texttt{play(B, Game', next-player(NextPlayer), X, Depth + 1) and
+\texttt{back(B, A)}}) and derive \texttt{build-next-plays(A, Game, NextPlayer,
+X + 1, T, NumberDescendants + 1, Play, Depth)}. By induction on
+\texttt{build-next-plays/7}, we get the other $n'$ children.
+
+Rule 5: no free space on \texttt{X}. We derive \texttt{build-next-plays(A, Game,
+NextPlayer, X + 1, T, NumberDescendants, Play, Depth)}. By induction on
+\texttt{build-next-plays/7}, we get the $n$ children.
+
+\end{proof}
+
+\begin{lemma}[Children Lemma]
+If \texttt{play(A, Game, NextPlayer, LastPlay, Depth)} then either \texttt{score(A, Score,
+      LastPlay)} or $\exists_n$ where $n$ is the number of available plays for
+\texttt{NextPlayer} in \texttt{Game}, creating $n$ new children $B$ where \texttt{play(B,
+      Game', OtherPlayer, Play, Depth + 1)} and a \texttt{maximize(A, N,
+         mininf, 0)} or \texttt{minimize(A, N, maxinf, 0)} is created if
+      $NextPlayer = root-player$ or not, respectively.
+\end{lemma}
+\begin{proof}
+A linear fact \texttt{play(A, Game, NextPlayer, LastPlay, Depth)} is used either
+in the first or second rules.
+
+If the first rule executes (\texttt{minimax\_score} returns a score) it means that
+\texttt{Game} is a final game state and there's no available plays for
+\texttt{NextPlayer}.
+
+Otherwise, the second rule will run. Using the Play lemma, we are able to prove
+our conclusion.
+\end{proof}
+
+\begin{lemma}[Maximize Lemma]
+Given a fact \texttt{maximize(A, N, BestScore, BestPlay)} and \texttt{N} facts
+\texttt{new-score(A, OtherScore, OtherPlay)}, then we end up with a single
+\texttt{score(A, BestScore', BestPlay')} where \texttt{BestScore'} is the
+highest score from \texttt{BestScore} or \texttt{OtherScore'}s and
+\texttt{BestPlay'} is the corresponding play.
+\end{lemma}
+\begin{proof}
+By induction on the number of \texttt{new-score/3} facts.
+
+Case 1 (\texttt{N = 0}): trivial by applying rule 15.
+
+Case 2 (\texttt{N > 0}): by picking an arbitrary \texttt{new-score(A,
+      OtherScore, OtherPlay} fact.
+
+   Sub case 2.1 (rule 13): if \texttt{BestScore < OtherScore} then we derive
+   \texttt{maximize(A, N-1, OtherScore, OtherPlay)}. Use induction to get the
+   final \texttt{score/3} fact.
+
+   Sub case 2.2 (rule 14): if \texttt{BestScore >= OtherScore} then we derive
+   \texttt{maximize(A, N-1, BestScore, BestPlay)}. Use induction to get the
+   final \texttt{score/3} fact.
+\end{proof}
+
+\begin{lemma}[Minimize Lemma]
+Given a fact \texttt{minimize(A, N, BestScore, BestPlay)} and \texttt{N} facts
+\texttt{new-score(A, OtherScore, OtherPlay)}, then we end up with a single
+\texttt{score(A, BestScore', BestPlay')} where \texttt{BestScore'} is the
+lowest score from \texttt{BestScore} or \texttt{OtherScore'}s and
+\texttt{BestPlay'} is the corresponding play.
+\end{lemma}
+\begin{proof}
+Use the same process used in Maximize Lemma.
+\end{proof}
+
+\begin{theorem}[Score Theorem]
+For every \texttt{play(A, Game, NextPlayer, LastPlay, Depth)}, we either
+directly get a \texttt{score/3} fact (leaf case). Or a recursive alternate maximization or
+minimization (depending if \texttt{NextPlayer = root-player}, respectively) of
+the children nodes. This max/minization will result in a \texttt{score(A, Score,
+BestPlay)} where \texttt{Score} is the max/min and \texttt{BestPlay} is the
+corresponding play of the score.
+\end{theorem}
+\begin{proof}
+By applying the Children Lemma and using induction on the number of free
+positions on the board \texttt{Game}.
+
+Case 1 (no free positions): direct score.
+
+Case 2 (available positions): $n$ children nodes $B$ with \texttt{play(B, Game',
+      next-player(NextPlayer), X, Play, Depth + 1)}, where \texttt{Game'} has
+position \texttt{X} filled up. We apply induction on \texttt{play} to get a
+\texttt{score(B, Score, Play)}. Since we also derived a \texttt{back(B, A)}
+fact, rule 9 will execute, deriving \texttt{new-score(A, Score, Play)}.
+
+Since we also derived \texttt{maximize(A, N, mininf, 0)} (or
+\texttt{minimize/4}), we have this maximize fact and $n$ \texttt{new-score/3}
+facts. Applying the Maximize Lemma, we get \texttt{score(A, BestScore,
+BestPlay)}.
+\end{proof}
+
+\begin{corollary}[MiniMax]
+Starting from a \texttt{play(@0, InitialGame, 1, 0, 1)}, we get a
+\texttt{score(A, BestScore, BestPlay)}, where \texttt{BestPlay} represents the
+best play player \texttt{1} is able to make that minimizes the possible loss for
+a worst case scenario giving \texttt{InitialGame}.
+\end{corollary}
+\begin{proof}
+If \texttt{next-player(1) = 2}, \texttt{next-player(2) = 1} and
+\texttt{root-player = 1} then applying the Score Theorem, we get the result
+needed.
+\end{proof}
+
 \end{document}
+
